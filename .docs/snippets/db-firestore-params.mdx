@@ -1,0 +1,12 @@
+| Parameter                    | Type               | Default | Description                                      |
+| ---------------------------- | ------------------ | ------- | ------------------------------------------------ |
+| `id`                         | `Optional[str]`    | -       | The ID of the database instance. UUID by default. |
+| `db_client`                  | `Optional[Client]` | -       | The Firestore client to use.                     |
+| `project_id`                 | `Optional[str]`    | -       | The GCP project ID for Firestore.                |
+| `session_collection`         | `Optional[str]`    | -       | Name of the collection to store sessions.        |
+| `memory_collection`          | `Optional[str]`    | -       | Name of the collection to store memories.        |
+| `metrics_collection`         | `Optional[str]`    | -       | Name of the collection to store metrics.         |
+| `eval_collection`            | `Optional[str]`    | -       | Name of the collection to store evaluation runs. |
+| `knowledge_collection`       | `Optional[str]`    | -       | Name of the collection to store knowledge documents. |
+| `traces_collection`          | `Optional[str]`    | -       | Name of the collection to store traces.            |
+| `spans_collection`           | `Optional[str]`    | -       | Name of the collection to store spans.             |

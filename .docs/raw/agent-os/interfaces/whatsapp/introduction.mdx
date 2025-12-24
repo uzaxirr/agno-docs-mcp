@@ -1,0 +1,97 @@
+---
+title: WhatsApp
+description: Host agents as WhatsApp applications
+---
+
+Use the WhatsApp interface to serve Agents or Teams via WhatsApp. It mounts webhook routes on a FastAPI app and sends responses back to WhatsApp users and threads.
+
+## Setup
+
+Follow the WhatsApp setup guide in the [Whatsapp Cookbook](https://github.com/agno-agi/agno/blob/main/cookbook/06_agent_os/interfaces/whatsapp/readme.md).
+
+Required environment variables:
+
+- `WHATSAPP_ACCESS_TOKEN`
+- `WHATSAPP_PHONE_NUMBER_ID`
+- `WHATSAPP_VERIFY_TOKEN`
+- Optional (production): `WHATSAPP_APP_SECRET` and `APP_ENV=production`
+
+<Note>
+The user's phone number is automatically used as the `user_id` for runs. This ensures that sessions and memory are appropriately scoped to the user.
+
+The phone number is also used for the `session_id`, so a single WhatsApp conversation corresponds to a single session. This should be considered when managing session history.
+</Note>
+
+## Example Usage
+
+Create an agent, expose it with the `Whatsapp` interface, and serve via `AgentOS`:
+
+```python
+from agno.agent import Agent
+from agno.models.openai import OpenAIChat
+from agno.os import AgentOS
+from agno.os.interfaces.whatsapp import Whatsapp
+
+image_agent = Agent(
+    model=OpenAIChat(id="gpt-5-mini"), # Ensure OPENAI_API_KEY is set
+    tools=[OpenAITools(image_model="gpt-image-1")],
+    markdown=True,
+    add_history_to_context=True,
+)
+
+agent_os = AgentOS(
+    agents=[image_agent],
+    interfaces=[Whatsapp(agent=image_agent)],
+)
+app = agent_os.get_app()
+
+if __name__ == "__main__":
+    agent_os.serve(app="basic:app", port=8000, reload=True)
+```
+
+Additional examples are available in the [cookbook](https://github.com/agno-agi/agno/tree/main/cookbook/06_agent_os/interfaces/whatsapp/).
+
+## Core Components
+
+- `Whatsapp` (interface): Wraps an Agno `Agent` or `Team` for WhatsApp via FastAPI.
+- `AgentOS.serve`: Serves the FastAPI app using Uvicorn.
+
+## `Whatsapp` Interface
+
+Main entry point for Agno WhatsApp applications.
+
+### Initialization Parameters
+
+| Parameter | Type              | Default | Description            |
+| --------- | ----------------- | ------- | ---------------------- |
+| `agent`   | `Optional[Agent]` | `None`  | Agno `Agent` instance. |
+| `team`    | `Optional[Team]`  | `None`  | Agno `Team` instance.  |
+
+Provide `agent` or `team`.
+
+### Key Method
+
+| Method       | Parameters               | Return Type | Description                                        |
+| ------------ | ------------------------ | ----------- | -------------------------------------------------- |
+| `get_router` | `use_async: bool = True` | `APIRouter` | Returns the FastAPI router and attaches endpoints. |
+
+## Endpoints
+
+Mounted under the `/whatsapp` prefix:
+
+### `GET /whatsapp/status`
+
+- Health/status of the interface.
+
+### `GET /whatsapp/webhook`
+
+- Verifies WhatsApp webhook (`hub.challenge`).
+- Returns `hub.challenge` on success; `403` on token mismatch; `500` if `WHATSAPP_VERIFY_TOKEN` missing.
+
+### `POST /whatsapp/webhook`
+
+- Receives WhatsApp messages and events.
+- Validates signature (`X-Hub-Signature-256`); bypassed in development mode.
+- Processes text, image, video, audio, and document messages via the agent/team.
+- Sends replies (splits long messages; uploads and sends generated images).
+- Responses: `200 {"status": "processing"}` or `{"status": "ignored"}`, `403` invalid signature, `500` errors.

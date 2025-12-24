@@ -1,0 +1,56 @@
+---
+title: "MCPTools within AgentOS"
+description: "Learn how to use MCPTools in the Agents, Teams and Workflows within your AgentOS"
+mode: wide
+---
+
+The [Model Context Protocol (MCP)](https://modelcontextprotocol.io) enables Agents to interact with external systems through a standardized interface.
+
+You can give your Agents access to MCP tools using the `MCPTools` class. Read more about using MCP tools [here](/basics/tools/mcp/overview).
+
+Your `MCPTools` will work normally within AgentOS. Their lifecycle is automatically handled, you don't need to handle their connection and disconnection.
+
+<Note>
+If you are using `MCPTools` within AgentOS, you should not use `reload=True` when serving your AgentOS.
+This can break the MCP connection during the FastAPI lifecycle.
+</Note>
+
+## Example
+
+```python mcp_tools_example.py
+from agno.agent import Agent
+from agno.os import AgentOS
+from agno.tools.mcp import MCPTools
+
+# Create MCPTools instance
+mcp_tools = MCPTools(
+    transport="streamable-http",
+    url="https://docs.agno.com/mcp"
+)
+
+# Create MCP-enabled agent
+agent = Agent(
+    id="agno-agent",
+    name="Agno Agent",
+    tools=[mcp_tools],
+)
+
+# AgentOS manages MCP lifespan
+agent_os = AgentOS(
+    description="AgentOS with MCP Tools",
+    agents=[agent],
+)
+
+app = agent_os.get_app()
+
+if __name__ == "__main__":
+    # Don't use reload=True with MCP tools to avoid lifespan issues
+    agent_os.serve(app="mcp_tools_example:app")
+```
+
+<Note>
+Refreshing the connection to MCP servers is **not** automatically handled. You can use [`refresh_connection`](/basics/tools/mcp/overview#connection-refresh) to manually refresh a connection.
+</Note>
+
+
+See here for a [full example](/agent-os/usage/mcp/mcp-tools-example).
