@@ -2,65 +2,85 @@
 
 A Model Context Protocol (MCP) server that provides access to [Agno](https://agno.com) framework documentation. Enables developers to easily access Agno docs through coding agents like Claude Code, Cursor, and other MCP-compatible tools.
 
-## Features
+## Quick Start (New Laptop Setup)
 
-- **6 Specialized Tools** for navigating Agno documentation:
-  - `agno_docs` - Core documentation (agents, teams, workflows, basics)
-  - `agno_reference` - API reference and parameter docs
-  - `agno_examples` - Code snippets and usage examples
-  - `agno_integrations` - Database, VectorDB, and model provider guides
-  - `agno_agentos` - AgentOS runtime documentation
-  - `agno_migration` - Migration guides, FAQs, and troubleshooting
+### Prerequisites
 
-- **Keyword-based search** across all documentation
-- **Path-based navigation** for exploring docs structure
-- **Offline support** - docs are preprocessed and bundled locally
-- **Multiple transports** - stdio (local) and HTTP (remote) support
-- **Production-ready** - Docker support, health checks, CORS configured
+- Python 3.10 or higher
+- Git
+- Access to the `agno-docs` repository (for documentation source)
 
-## Installation
-
-### Using pip
-
-```bash
-pip install agno-docs-mcp
-```
-
-### From source
+### Step 1: Clone the Repository
 
 ```bash
 git clone https://github.com/agno-agi/agno-docs-mcp
 cd agno-docs-mcp
-pip install -e .
 ```
 
-## Setup
-
-### 1. Prepare Documentation
-
-Before using the server, you need to prepare the documentation:
+### Step 2: Create Virtual Environment
 
 ```bash
-# Set the path to your Agno docs repository
-export AGNO_DOCS_PATH=/path/to/agno-docs
+python3 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+```
 
-# Run the preparation script
+### Step 3: Install Dependencies
+
+```bash
+# Upgrade pip first (required for pyproject.toml editable installs)
+pip install --upgrade pip
+
+# Install the package in editable mode with dev dependencies
+pip install -e ".[dev]"
+```
+
+### Step 4: Clone Agno Docs (if not already available)
+
+```bash
+# Clone the agno-docs repository (adjust path as needed)
+git clone https://github.com/agno-agi/agno-docs ~/Work/agno-docs
+```
+
+### Step 5: Prepare Documentation
+
+```bash
+# Set the path to your agno-docs repository
+export AGNO_DOCS_PATH=~/Work/agno-docs
+
+# Run the preparation script to copy and index docs
 python -m agno_docs_mcp.prepare
 ```
 
-This copies and indexes the documentation for fast access.
+You should see output like:
+```
+Preparing Agno documentation...
+  Source: /Users/you/Work/agno-docs
+  Output: /Users/you/Work/agno-docs-mcp/.docs
 
-### 2. Configure Your MCP Client
+Copying documentation files...
+  Copied 596 files from basics/
+  Copied 148 files from reference/
+  Copied 74 files from reference-api/
+  ...
+  Copied OpenAPI spec (openapi.json)
 
-#### Claude Code / Claude Desktop
+Building search index...
+  Indexed 1851 files in 10 categories
 
-Add to your Claude configuration:
+Done!
+```
+
+### Step 6: Configure Your MCP Client
+
+#### Claude Code
+
+Add to `~/.claude.json` or your project's `.claude/settings.json`:
 
 ```json
 {
   "mcpServers": {
     "agno-docs": {
-      "command": "python",
+      "command": "/path/to/agno-docs-mcp/.venv/bin/python",
       "args": ["-m", "agno_docs_mcp"]
     }
   }
@@ -69,40 +89,74 @@ Add to your Claude configuration:
 
 #### Cursor
 
-Add to your Cursor MCP settings:
+Add to your Cursor MCP settings (`.cursor/mcp.json`):
 
 ```json
 {
   "mcpServers": {
     "agno-docs": {
-      "command": "python",
+      "command": "/path/to/agno-docs-mcp/.venv/bin/python",
       "args": ["-m", "agno_docs_mcp"]
     }
   }
 }
 ```
 
-#### Remote HTTP Server
-
-If using the hosted version at `mcp.docs.agno.com`:
+#### Using HTTP Transport (Remote Access)
 
 ```json
 {
   "mcpServers": {
     "agno-docs": {
-      "url": "https://mcp.docs.agno.com/mcp",
+      "url": "http://localhost:8000/mcp",
       "transport": "streamable-http"
     }
   }
 }
 ```
 
-## Running the Server
-
-### Local CLI Mode (stdio)
+### Step 7: Verify Installation
 
 ```bash
-# Default - runs with stdio transport for local CLI tools
+# Test the server directly
+python -c "from agno_docs_mcp.tools.api import agno_api; print(agno_api('memory')[:200])"
+
+# Or start the HTTP server
+python -m agno_docs_mcp --transport http --port 8000
+
+# In another terminal, test with curl
+curl -X POST http://localhost:8000/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+```
+
+## Features
+
+- **7 Specialized Tools** for navigating Agno documentation:
+  - `agno_docs` - SDK conceptual documentation (agents, teams, workflows, basics)
+  - `agno_reference` - SDK class and method reference
+  - `agno_examples` - Code snippets and usage examples
+  - `agno_integrations` - Database, VectorDB, and model provider guides
+  - `agno_agentos` - AgentOS runtime documentation
+  - `agno_api` - **REST API endpoints** from OpenAPI spec
+  - `agno_migration` - Migration guides, FAQs, and troubleshooting
+
+- **OpenAPI Integration** - Parses the OpenAPI spec for accurate REST endpoint docs
+- **Keyword-based search** across all documentation
+- **Path-based navigation** for exploring docs structure
+- **Offline support** - docs are preprocessed and bundled locally
+- **Multiple transports** - stdio (local) and HTTP (remote) support
+
+## Running the Server
+
+### Local CLI Mode (stdio) - Default
+
+```bash
+# Activate venv first
+source .venv/bin/activate
+
+# Run with stdio transport (for Claude Code, Cursor)
 python -m agno_docs_mcp
 ```
 
@@ -116,140 +170,137 @@ python -m agno_docs_mcp --transport http --port 8000
 # Health check at http://localhost:8000/health
 ```
 
-### Production Deployment (uvicorn)
+### Production Deployment
 
 ```bash
-# For production, use uvicorn with the ASGI app
+# Using uvicorn directly
 uvicorn agno_docs_mcp.app:app --host 0.0.0.0 --port 8000
-```
 
-### Docker Deployment
-
-```bash
-# Build the Docker image
+# Using Docker
 docker build -t agno-docs-mcp .
-
-# Run the container
 docker run -p 8000:8000 agno-docs-mcp
-
-# Or use docker-compose
-docker-compose up
-```
-
-## Usage
-
-Once configured, the MCP tools are available to your coding agent.
-
-### Example Queries
-
-**Explore documentation structure:**
-```
-Use agno_docs with paths=["basics/"] to see what's available
-```
-
-**Get agent documentation:**
-```
-Use agno_docs with paths=["basics/agents/overview"]
-```
-
-**Find code examples:**
-```
-Use agno_examples with category="agents" to get agent examples
-```
-
-**Look up API reference:**
-```
-Use agno_reference with topic="models" to see model configuration
-```
-
-**Get integration docs:**
-```
-Use agno_integrations with integration_type="database", name="postgres"
-```
-
-**Check AgentOS docs:**
-```
-Use agno_agentos with path="features/security"
-```
-
-**Migration help:**
-```
-Use agno_migration with topic="v2-migration"
 ```
 
 ## Tools Reference
 
-### agno_docs
+### agno_api (NEW - REST API Endpoints)
 
-Navigate core Agno documentation.
+Get AgentOS REST API endpoints from the OpenAPI specification.
+
+```
+agno_api(resource="memory")
+```
 
 **Parameters:**
-- `paths` (list[str], required) - Documentation paths to fetch
-- `query_keywords` (list[str], optional) - Keywords for content matching
+- `resource` (str) - API resource: memory, agents, teams, workflows, sessions, knowledge, evals, traces, metrics, database, playground
 
-**Coverage:** Get Started, Basics (agents, teams, workflows, tools, memory, knowledge), FAQ, How-to guides
+**Use for:** REST API endpoints, HTTP methods, request/response schemas
+
+### agno_docs
+
+Get SDK conceptual documentation and guides for writing agent code.
+
+```
+agno_docs(path="basics/agents/")
+```
+
+**Parameters:**
+- `path` (str) - Documentation path (e.g., "basics/", "basics/agents/", "basics/memory/")
+
+**Use for:** How to write Python code with Agno SDK
 
 ### agno_reference
 
-Access API reference documentation.
+Get SDK class and method reference (parameters, signatures, options).
+
+```
+agno_reference(topic="agents")
+```
 
 **Parameters:**
-- `topic` (str, required) - Reference topic: agents, teams, workflows, tools, models, memory, knowledge, storage, hooks, compression, reasoning, agent-os
-- `query_keywords` (list[str], optional) - Keywords for filtering
+- `topic` (str) - Reference topic: agents, teams, workflows, tools, models, memory, knowledge, storage, hooks, compression, reasoning, agent-os
+
+**Use for:** Agent() constructor parameters, method signatures, configuration options
 
 ### agno_examples
 
-Get code examples and snippets.
+Get SDK code examples for building agents.
+
+```
+agno_examples(category="agents")
+```
 
 **Parameters:**
-- `category` (str, optional) - Category: agents, teams, workflows, tools, memory, knowledge, models, database, evals, guardrails, hitl, multimodal, reasoning, sessions, tracing
-- `query_keywords` (list[str], optional) - Keywords for searching
+- `category` (str) - Category: agents, teams, workflows, tools, memory, knowledge, models, database, evals, guardrails, hitl, multimodal, reasoning, sessions, tracing
 
 ### agno_integrations
 
-Access integration guides.
+Get integration documentation for databases, vector stores, and models.
+
+```
+agno_integrations(integration_type="database", name="postgres")
+```
 
 **Parameters:**
-- `integration_type` (str, required) - Type: database, vectordb, models, toolkits, memory, observability, discord, testing
-- `name` (str, optional) - Specific integration name (e.g., "postgres", "pinecone")
-- `query_keywords` (list[str], optional) - Keywords for searching
+- `integration_type` (str) - Type: database, vectordb, models, toolkits
+- `name` (str, optional) - Specific integration name
 
 ### agno_agentos
 
-Get AgentOS runtime documentation.
+Get AgentOS runtime and deployment documentation.
+
+```
+agno_agentos(path="features/memories")
+```
 
 **Parameters:**
-- `path` (str, optional) - Path within agent-os docs (e.g., "overview", "features/security")
-- `query_keywords` (list[str], optional) - Keywords for searching
+- `path` (str) - Path within AgentOS docs (e.g., "api/", "features/", "security/")
+
+**Use for:** Deployment docs, runtime features, authentication, middleware
 
 ### agno_migration
 
-Access migration guides and FAQs.
+Get migration guides and FAQ documentation.
+
+```
+agno_migration(topic="v2-migration")
+```
 
 **Parameters:**
-- `topic` (str, optional) - Migration topic: v2-migration, workflows-migration, installation, contributing, cursor-rules, changelog
-- `faq_topic` (str, optional) - FAQ topic: agentos-connection, docker-connection, environment, openai-key, rbac-auth, structured-outputs, switching-models, tpm, workflow-vs-team, tableplus
-- `query_keywords` (list[str], optional) - Keywords for searching
+- `topic` (str) - Migration topic or FAQ topic
 
-## Development
+## Tool Selection Guide
 
-### Project Structure
+| Question Type | Use This Tool |
+|--------------|---------------|
+| "What REST API endpoints for memory?" | `agno_api("memory")` |
+| "How to create an agent in Python?" | `agno_docs("basics/agents/")` |
+| "What parameters does Agent() accept?" | `agno_reference("agents")` |
+| "Show me agent code examples" | `agno_examples("agents")` |
+| "How to connect to Postgres?" | `agno_integrations("database", "postgres")` |
+| "How to deploy agents?" | `agno_agentos("api/")` |
+| "How to migrate from v1?" | `agno_migration("v2-migration")` |
+
+## Project Structure
 
 ```
 agno-docs-mcp/
 ├── pyproject.toml
 ├── README.md
+├── .venv/                      # Virtual environment
 ├── src/
 │   └── agno_docs_mcp/
 │       ├── __init__.py
 │       ├── __main__.py
-│       ├── server.py           # Main MCP server
+│       ├── server.py           # Main MCP server with tool registration
+│       ├── app.py              # FastAPI/ASGI app for HTTP
 │       ├── tools/              # Tool implementations
 │       │   ├── docs.py
 │       │   ├── reference.py
 │       │   ├── examples.py
 │       │   ├── integrations.py
 │       │   ├── agentos.py
+│       │   ├── api.py          # NEW: OpenAPI parser
 │       │   └── migration.py
 │       ├── utils/              # Utility modules
 │       │   ├── search.py
@@ -258,22 +309,57 @@ agno-docs-mcp/
 │       └── prepare/            # Doc preparation
 │           └── prepare_docs.py
 ├── .docs/                      # Preprocessed docs (generated)
+│   ├── raw/                    # Copied MDX files
+│   ├── snippets/               # Snippet files
+│   ├── index.json              # Search index
+│   └── openapi.json            # OpenAPI spec
 └── tests/
 ```
 
-### Running Tests
+## Updating Documentation
+
+When the agno-docs repository is updated:
 
 ```bash
-pip install -e ".[dev]"
-pytest
+# Pull latest docs
+cd ~/Work/agno-docs
+git pull
+
+# Re-run preparation
+cd ~/Work/agno-docs-mcp
+source .venv/bin/activate
+python -m agno_docs_mcp.prepare
 ```
 
-### Building
+## Troubleshooting
 
+### "OpenAPI specification not found"
+
+Run the prepare script:
 ```bash
-pip install build
-python -m build
+export AGNO_DOCS_PATH=~/Work/agno-docs
+python -m agno_docs_mcp.prepare
 ```
+
+### "Module not found" errors
+
+Make sure you're using the virtual environment:
+```bash
+source .venv/bin/activate
+which python  # Should show .venv/bin/python
+```
+
+### MCP client not connecting
+
+1. Check the path in your MCP config points to the venv Python:
+   ```json
+   "command": "/absolute/path/to/agno-docs-mcp/.venv/bin/python"
+   ```
+
+2. Test the server manually:
+   ```bash
+   /path/to/agno-docs-mcp/.venv/bin/python -m agno_docs_mcp
+   ```
 
 ## License
 
