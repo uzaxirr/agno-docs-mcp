@@ -5,6 +5,7 @@ Enables developers to easily access Agno docs through coding agents like Claude 
 """
 
 import argparse
+import os
 
 from mcp.server.fastmcp import FastMCP
 
@@ -16,11 +17,22 @@ from .tools.agentos import agno_agentos as _agno_agentos
 from .tools.migration import agno_migration as _agno_migration
 from .tools.api import agno_api as _agno_api
 
+# Configure allowed hosts for DNS rebinding protection
+# Supports MCP_ALLOWED_HOSTS env var (comma-separated) for deployment flexibility
+_default_hosts = ["localhost", "127.0.0.1"]
+_allowed_hosts_env = os.getenv("MCP_ALLOWED_HOSTS", "")
+_custom_hosts = [h.strip() for h in _allowed_hosts_env.split(",") if h.strip()]
+_all_hosts = _default_hosts + _custom_hosts
+# Add wildcard port suffix for flexibility
+_allowed_hosts = _all_hosts + [f"{h}:*" for h in _all_hosts]
+
 # Create MCP server with HTTP-optimized settings
 mcp = FastMCP(
     "agno-docs-server",
     stateless_http=True,   # Stateless for scalability
     json_response=True,    # JSON responses for HTTP
+    host="0.0.0.0",        # Bind to all interfaces
+    allowed_hosts=_allowed_hosts,  # Allow configured hosts
 )
 
 
