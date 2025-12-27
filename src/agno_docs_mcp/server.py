@@ -8,6 +8,7 @@ import argparse
 import os
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 from .tools.docs import agno_docs as _agno_docs
 from .tools.reference import agno_reference as _agno_reference
@@ -26,13 +27,20 @@ _all_hosts = _default_hosts + _custom_hosts
 # Add wildcard port suffix for flexibility
 _allowed_hosts = _all_hosts + [f"{h}:*" for h in _all_hosts]
 
+# Transport security settings for DNS rebinding protection
+_transport_security = TransportSecuritySettings(
+    enable_dns_rebinding_protection=True,
+    allowed_hosts=_allowed_hosts,
+    allowed_origins=["*"],  # Allow all origins for public API
+)
+
 # Create MCP server with HTTP-optimized settings
 mcp = FastMCP(
     "agno-docs-server",
     stateless_http=True,   # Stateless for scalability
     json_response=True,    # JSON responses for HTTP
     host="0.0.0.0",        # Bind to all interfaces
-    allowed_hosts=_allowed_hosts,  # Allow configured hosts
+    transport_security=_transport_security,
 )
 
 
