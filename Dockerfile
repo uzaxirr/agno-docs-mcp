@@ -18,9 +18,9 @@ COPY .docs/ .docs/
 # Expose the MCP server port
 EXPOSE 8000
 
-# Health check
+# Health check (Railway handles health checks externally, but keeping for local Docker use)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
 
-# Run the HTTP server
-CMD ["python", "-m", "agno_docs_mcp", "--transport", "http", "--host", "0.0.0.0", "--port", "8000"]
+# Run the HTTP server (uses Railway's PORT env var, defaults to 8000)
+CMD ["sh", "-c", "python -m agno_docs_mcp --transport http --host 0.0.0.0 --port ${PORT:-8000}"]
