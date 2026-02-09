@@ -27,7 +27,7 @@ wheels/
 *.egg
 
 # Generated documentation (re-generate with `python -m agno_docs_mcp.prepare`)
-# .docs/  # Commented out to include in git for Railway deployment
+.docs/
 
 # IDE
 .idea/
@@ -81,3 +81,6 @@ tmp/
 temp/
 *.tmp
 *.temp
+
+# Source and generated docs
+agno-docs/
