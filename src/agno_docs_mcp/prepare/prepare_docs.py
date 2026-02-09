@@ -2,6 +2,18 @@
 
 This script copies and organizes documentation from the Agno docs repository
 into the .docs/ directory for use by the MCP server.
+
+The agno-docs repo has a flat structure (agents/, teams/, memory/, etc.)
+but the MCP tools expect a reorganized layout:
+  - basics/    → core concept docs (agents, teams, workflows, tools, memory, etc.)
+  - reference/ → SDK class/method reference
+  - integrations/ → database providers, vector stores, model providers, toolkits
+  - agent-os/  → AgentOS runtime docs
+  - how-to/    → migration guides, install, contributing (from other/)
+  - faq/       → FAQ docs
+  - examples/  → cookbook examples
+
+This script handles the mapping from the real repo structure to what tools expect.
 """
 
 import json
@@ -11,8 +23,20 @@ from pathlib import Path
 from typing import Any
 
 
-# Default source directory (can be overridden)
-DEFAULT_AGNO_DOCS_PATH = Path("/Users/uzair/Work/agno-docs")
+# Default: look for agno-docs as a sibling or subdirectory
+def _find_default_agno_docs_path() -> Path:
+    """Try to auto-detect the agno-docs location."""
+    project_root = Path(__file__).parent.parent.parent.parent
+    # Check if agno-docs is a subdirectory of the project
+    candidate = project_root / "agno-docs"
+    if candidate.exists():
+        return candidate
+    # Fallback: sibling directory
+    candidate = project_root.parent / "agno-docs"
+    if candidate.exists():
+        return candidate
+    # Last resort: return the subdirectory path (will fail with helpful error)
+    return project_root / "agno-docs"
 
 
 def get_source_docs_path() -> Path:
@@ -21,7 +45,7 @@ def get_source_docs_path() -> Path:
     env_path = os.environ.get("AGNO_DOCS_PATH")
     if env_path:
         return Path(env_path)
-    return DEFAULT_AGNO_DOCS_PATH
+    return _find_default_agno_docs_path()
 
 
 def get_output_dir() -> Path:
@@ -31,6 +55,9 @@ def get_output_dir() -> Path:
 
 def copy_docs(source_dir: Path, output_dir: Path) -> dict[str, int]:
     """Copy documentation files from source to output directory.
+
+    Reorganizes the flat agno-docs repo structure into the layout
+    expected by the MCP tools.
 
     Args:
         source_dir: Source Agno docs directory
@@ -57,34 +84,122 @@ def copy_docs(source_dir: Path, output_dir: Path) -> dict[str, int]:
         "directories_created": 0,
     }
 
-    # Define source directories to copy
-    source_mappings = [
-        # (source_subdir, dest_subdir)
-        ("basics", "basics"),
-        ("reference", "reference"),
-        ("reference-api", "reference-api"),  # REST API endpoint docs + OpenAPI spec
-        ("integrations", "integrations"),
-        ("agent-os", "agent-os"),
-        ("get-started", "get-started"),
-        ("how-to", "how-to"),
-        ("faq", "faq"),
-        ("examples", "examples"),
+    # ─── 1. "basics/" — Core SDK concept docs ───
+    # The tools expect basics/agents/, basics/teams/, etc.
+    # In the real repo these are top-level directories.
+    basics_sources = [
+        "agents", "teams", "workflows", "tools", "memory", "knowledge",
+        "models", "database", "evals", "guardrails", "hitl", "multimodal",
+        "reasoning", "sessions", "tracing", "compression", "context",
+        "hooks", "skills", "state", "templates", "history",
+        "input-output", "run-cancellation", "learning",
     ]
+    for subdir in basics_sources:
+        src_path = source_dir / subdir
+        dst_path = raw_dir / "basics" / subdir
+        if src_path.exists() and src_path.is_dir():
+            copied = copy_directory_recursive(src_path, dst_path)
+            stats["docs_copied"] += copied
+            stats["directories_created"] += 1
+            print(f"  Copied {copied} files from {subdir}/ → basics/{subdir}/")
 
-    # Copy each documentation section
-    for source_subdir, dest_subdir in source_mappings:
+    # ─── 2. Direct-copy directories (already match expected layout) ───
+    direct_mappings = [
+        ("reference", "reference"),
+        ("reference-api", "reference-api"),
+        ("agent-os", "agent-os"),
+        ("faq", "faq"),
+        ("integrations", "integrations"),  # base integrations dir (discord, memory, testing)
+        ("production", "production"),
+        ("dependencies", "dependencies"),
+        ("cookbook", "examples"),  # cookbook → examples
+    ]
+    for source_subdir, dest_subdir in direct_mappings:
         src_path = source_dir / source_subdir
         dst_path = raw_dir / dest_subdir
-
         if src_path.exists() and src_path.is_dir():
+            copied = copy_directory_recursive(src_path, dst_path)
+            stats["docs_copied"] += copied
+            stats["directories_created"] += 1
+            print(f"  Copied {copied} files from {source_subdir}/ → {dest_subdir}/")
+
+    # ─── 3. "how-to/" — Migration guides (from other/) ───
+    other_src = source_dir / "other"
+    howto_dst = raw_dir / "how-to"
+    if other_src.exists() and other_src.is_dir():
+        copied = copy_directory_recursive(other_src, howto_dst)
+        stats["docs_copied"] += copied
+        stats["directories_created"] += 1
+        print(f"  Copied {copied} files from other/ → how-to/")
+
+    # ─── 4. "integrations/" — Provider docs from various sources ───
+    # database providers → integrations/database/
+    db_providers_src = source_dir / "database" / "providers"
+    db_providers_dst = raw_dir / "integrations" / "database"
+    if db_providers_src.exists():
+        copied = copy_directory_recursive(db_providers_src, db_providers_dst)
+        stats["docs_copied"] += copied
+        print(f"  Copied {copied} files from database/providers/ → integrations/database/")
+
+    # vector store providers → integrations/vectordb/
+    vs_src = source_dir / "knowledge" / "vector-stores"
+    vs_dst = raw_dir / "integrations" / "vectordb"
+    if vs_src.exists():
+        copied = copy_directory_recursive(vs_src, vs_dst)
+        stats["docs_copied"] += copied
+        print(f"  Copied {copied} files from knowledge/vector-stores/ → integrations/vectordb/")
+
+    # model providers → integrations/models/
+    models_src = source_dir / "models" / "providers"
+    models_dst = raw_dir / "integrations" / "models"
+    if models_src.exists():
+        copied = copy_directory_recursive(models_src, models_dst)
+        stats["docs_copied"] += copied
+        print(f"  Copied {copied} files from models/providers/ → integrations/models/")
+
+    # toolkits → integrations/toolkits/
+    toolkits_src = source_dir / "tools" / "toolkits"
+    toolkits_dst = raw_dir / "integrations" / "toolkits"
+    if toolkits_src.exists():
+        copied = copy_directory_recursive(toolkits_src, toolkits_dst)
+        stats["docs_copied"] += copied
+        print(f"  Copied {copied} files from tools/toolkits/ → integrations/toolkits/")
+
+    # observability → integrations/observability/
+    obs_src = source_dir / "observability"
+    obs_dst = raw_dir / "integrations" / "observability"
+    if obs_src.exists():
+        copied = copy_directory_recursive(obs_src, obs_dst)
+        stats["docs_copied"] += copied
+        print(f"  Copied {copied} files from observability/ → integrations/observability/")
+
+    # ─── 5. Copy each documentation section (legacy mappings, skip if already copied) ───
+    # This is a no-op safety net for any directories not covered above
+    legacy_mappings = [
+        ("get-started", "get-started"),
+        ("how-to", "how-to"),
+        ("basics", "basics"),
+        ("examples", "examples"),
+    ]
+    for source_subdir, dest_subdir in legacy_mappings:
+        src_path = source_dir / source_subdir
+        dst_path = raw_dir / dest_subdir
+        if src_path.exists() and src_path.is_dir() and not dst_path.exists():
             copied = copy_directory_recursive(src_path, dst_path)
             stats["docs_copied"] += copied
             stats["directories_created"] += 1
             print(f"  Copied {copied} files from {source_subdir}/")
 
-    # Copy root-level MDX files
+    # ─── 6. Root-level MDX files → raw/ and get-started/ ───
+    get_started_dir = raw_dir / "get-started"
+    get_started_dir.mkdir(parents=True, exist_ok=True)
+
     for file in source_dir.glob("*.mdx"):
         shutil.copy2(file, raw_dir / file.name)
+        # Also copy intro/getting-started files to get-started/
+        if file.stem in ("introduction", "first-agent", "first-multi-agent-system",
+                         "index", "get-help", "performance"):
+            shutil.copy2(file, get_started_dir / file.name)
         stats["docs_copied"] += 1
 
     for file in source_dir.glob("*.md"):
@@ -267,7 +382,7 @@ def main() -> None:
         "--source",
         type=Path,
         default=None,
-        help="Path to Agno docs directory (default: from AGNO_DOCS_PATH env or /Users/uzair/Work/agno-docs)"
+        help="Path to Agno docs directory (default: auto-detect from AGNO_DOCS_PATH env or ./agno-docs)"
     )
     args = parser.parse_args()
 
